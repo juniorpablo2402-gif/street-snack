@@ -139,10 +139,12 @@ function AuthScreen({ onAuth, onVendor }) {
       if (!phone.trim() || phone.length < 8) { setErr("Numéro invalide."); setLoading(false); return; }
       const { data, error } = await sb.auth.signUp({ email, password, options: { data: { name, phone } } });
       if (error) { setErr(error.message); setLoading(false); return; }
-      if (data.user) {
-        await sb.from("profiles").upsert({ id: data.user.id, name, phone, role: "client" });
-        onAuth({ id: data.user.id, name, phone, role: "client", email });
-      }
+      // Connexion auto après inscription
+      const { data: d2, error: e2 } = await sb.auth.signInWithPassword({ email, password });
+      const uid = d2?.user?.id || data?.user?.id;
+      if (!uid) { setErr("Compte créé ! Connectez-vous maintenant."); setLoading(false); return; }
+      await sb.from("profiles").upsert({ id: uid, name, phone, role: "client" });
+      onAuth({ id: uid, name, phone, role: "client", email });
     } else {
       const { data, error } = await sb.auth.signInWithPassword({ email, password });
       if (error) { setErr("Email ou mot de passe incorrect."); setLoading(false); return; }
