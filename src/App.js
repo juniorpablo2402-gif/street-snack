@@ -215,72 +215,109 @@ function OrderTracking({ orderId, onBack }) {
     fetchOrder();
     const channel = sb.channel(`order-${orderId}`)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders", filter: `id=eq.${orderId}` },
-        payload => setOrder(payload.new))
+        payload => { setOrder(payload.new); })
       .subscribe();
     return () => sb.removeChannel(channel);
   }, [fetchOrder, orderId]);
 
-  const cidx = STEPS_LIST.indexOf(order?.status || "pending");
-  const st   = ORDER_STATUSES[order?.status] || ORDER_STATUSES.pending;
+  const GLOVO_STEPS = [
+    { key: "pending",    icon: "🛎️", label: "Commande reçue",    desc: "Votre commande est en attente de confirmation",  color: "#f59e0b", bg: "#1a1200" },
+    { key: "confirmed",  icon: "✅", label: "Commande acceptée", desc: "Le restaurant a accepté votre commande !",        color: "#4fc3f7", bg: "#001f2e" },
+    { key: "preparing",  icon: "👨‍🍳", label: "En préparation",   desc: "On prépare votre commande, encore un peu...",    color: "#a78bfa", bg: "#1a0a2e" },
+    { key: "ready",      icon: "🔔", label: "Prête !",            desc: "Votre commande est prête ! Venez la récupérer.", color: "#25D366", bg: "#0a2e12" },
+    { key: "delivered",  icon: "🎉", label: "Livrée",            desc: "Merci et à bientôt ! Bon appétit 🍖",            color: "#ff9500", bg: "#1a0a00" },
+  ];
 
-  if (loading) return <div style={{ ...S.root, background: t.bg }}><div style={{ textAlign: "center", padding: 80, color: "#555" }}>Chargement...</div></div>;
+  const currentStep = GLOVO_STEPS.find(s => s.key === order?.status) || GLOVO_STEPS[0];
+  const currentIdx  = GLOVO_STEPS.findIndex(s => s.key === order?.status);
+
+  if (loading) return (
+    <div style={{ minHeight:"100vh", background:"#0f0f0f", display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <div style={{ textAlign:"center" }}>
+        <div style={{ fontSize:48, marginBottom:16 }}>⏳</div>
+        <div style={{ color:"#888" }}>Chargement...</div>
+      </div>
+    </div>
+  );
 
   return (
     <div style={{ ...S.root, background: t.bg }}>
       <div style={S.header}>
         <div style={S.logoRow}>
           <span style={S.logoEmoji}>🔥</span>
-          <div><div style={{ ...S.logoName }}>THE STREET SNACK</div><div style={S.logoTagline}>Suivi commande</div></div>
+          <div><div style={S.logoName}>THE STREET SNACK</div><div style={S.logoTagline}>Suivi de commande #{orderId}</div></div>
           <button onClick={onBack} style={S.exitBtn}>✕</button>
         </div>
       </div>
+
       <div style={S.content}>
-        {/* Statut */}
-        <div style={{ background: st.bg, border: `2px solid ${st.color}`, borderRadius: 18, padding: 24, textAlign: "center", marginBottom: 20 }}>
-          <div style={{ fontSize: 56, marginBottom: 8 }}>{st.icon}</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: st.color }}>{st.label}</div>
-          {order?.status === "ready" && <div style={{ fontSize: 13, color: "#25D366", marginTop: 8, fontWeight: 600 }}>🔔 Prête ! Venez récupérer votre commande.</div>}
-          {order?.status === "preparing" && <div style={{ fontSize: 13, color: "#a78bfa", marginTop: 8 }}>On prépare votre commande, encore un peu...</div>}
+
+        {/* Carte statut principal style Glovo */}
+        <div style={{ background: currentStep.bg, border: `2px solid ${currentStep.color}`, borderRadius: 24, padding: "28px 20px", textAlign: "center", marginBottom: 20, transition: "all 0.5s" }}>
+          <div style={{ fontSize: 64, marginBottom: 12, lineHeight: 1 }}>{currentStep.icon}</div>
+          <div style={{ fontSize: 22, fontWeight: 900, color: currentStep.color, marginBottom: 8 }}>{currentStep.label}</div>
+          <div style={{ fontSize: 14, color: "#aaa", lineHeight: 1.5 }}>{currentStep.desc}</div>
+          {order?.status === "ready" && (
+            <div style={{ marginTop: 16, background: "rgba(37,211,102,0.15)", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#25D366", fontWeight: 600 }}>
+              📍 {order?.order_type === "table" ? `Table ${order?.table_number}` : "Récupérez votre commande au comptoir"}
+            </div>
+          )}
         </div>
 
-        {/* Progression */}
-        <div style={{ background: t.card, borderRadius: 14, padding: 16, marginBottom: 16, border: `1px solid ${t.border}` }}>
-          <div style={{ display: "flex", justifyContent: "space-between", position: "relative" }}>
-            <div style={{ position: "absolute", top: 12, left: "10%", right: "10%", height: 3, background: t.border, borderRadius: 3 }} />
-            <div style={{ position: "absolute", top: 12, left: "10%", height: 3, width: `${Math.max(0, (cidx / (STEPS_LIST.length - 1)) * 80)}%`, background: "#ff6b00", borderRadius: 3, transition: "width 0.5s" }} />
-            {STEPS_LIST.map((s, i) => (
-              <div key={s} style={{ display: "flex", flexDirection: "column", alignItems: "center", zIndex: 2, flex: 1 }}>
-                <div style={{ width: 26, height: 26, borderRadius: "50%", background: i <= cidx ? "#ff6b00" : t.border, border: `2px solid ${i <= cidx ? "#ff6b00" : t.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#fff" }}>{i <= cidx ? "✓" : ""}</div>
-                <div style={{ fontSize: 9, color: i <= cidx ? "#ff9500" : "#555", marginTop: 4, textAlign: "center", lineHeight: 1.2 }}>{ORDER_STATUSES[s].label.split(" ")[0]}</div>
-              </div>
-            ))}
+        {/* Barre de progression style Glovo */}
+        <div style={{ background: t.card, borderRadius: 16, padding: "16px 12px", marginBottom: 16, border: `1px solid ${t.border}` }}>
+          <div style={{ position: "relative", paddingTop: 8 }}>
+            {/* Ligne de fond */}
+            <div style={{ position: "absolute", top: 20, left: "8%", right: "8%", height: 4, background: t.border, borderRadius: 4 }} />
+            {/* Ligne de progression */}
+            <div style={{ position: "absolute", top: 20, left: "8%", height: 4, borderRadius: 4, background: "linear-gradient(90deg, #ff6b00, #ff9500)", transition: "width 0.8s ease", width: currentIdx === 0 ? "0%" : `${(currentIdx / (GLOVO_STEPS.length - 1)) * 84}%` }} />
+            <div style={{ display: "flex", justifyContent: "space-between", position: "relative", zIndex: 2 }}>
+              {GLOVO_STEPS.map((step, i) => (
+                <div key={step.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: i <= currentIdx ? "#ff6b00" : t.border, border: `3px solid ${i <= currentIdx ? "#ff9500" : t.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, transition: "all 0.4s", boxShadow: i === currentIdx ? "0 0 12px rgba(255,107,0,0.6)" : "none" }}>
+                    {i < currentIdx ? "✓" : i === currentIdx ? <span style={{ fontSize: 10 }}>●</span> : ""}
+                  </div>
+                  <div style={{ fontSize: 8, color: i <= currentIdx ? "#ff9500" : "#555", marginTop: 5, textAlign: "center", lineHeight: 1.2, maxWidth: 50 }}>
+                    {step.label.split(" ")[0]}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Récap articles */}
-        <div style={{ background: t.card, borderRadius: 14, padding: 14, marginBottom: 16, border: `1px solid ${t.border}` }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#ff9500", marginBottom: 10 }}>📋 Votre commande #{orderId}</div>
-          <div style={{ fontSize: 12, color: "#888", marginBottom: 8 }}>
-            👤 {order?.client_name} • {order?.order_type === "table" ? `🪑 Table ${order?.table_number}` : "🛍️ À emporter"} • {order?.created_at && ft(order.created_at)}
+        {/* Récap commande */}
+        <div style={{ background: t.card, borderRadius: 16, padding: 16, marginBottom: 16, border: `1px solid ${t.border}` }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#ff9500", marginBottom: 10 }}>📋 Commande #{orderId}</div>
+          <div style={{ fontSize: 12, color: "#888", marginBottom: 12, display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <span>👤 {order?.client_name}</span>
+            <span>{order?.order_type === "table" ? `🪑 Table ${order?.table_number}` : "🛍️ À emporter"}</span>
+            <span>💳 {order?.payment_method === "wave" ? "🌊 Wave" : "💵 Espèces"}</span>
           </div>
           {items.map((it, i) => (
-            <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 5, color: t.text }}>
-              <span>{it.quantity}× {it.name}</span><span style={{ color: "#ff9500" }}>{fp(it.price * it.quantity)}</span>
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 8, color: t.text, padding: "6px 0", borderBottom: `1px solid ${t.border}` }}>
+              <span style={{ display: "flex", gap: 8 }}>
+                <span style={{ color: "#ff9500", fontWeight: 700 }}>{it.quantity}×</span>
+                <span>{it.name}</span>
+              </span>
+              <span style={{ color: "#ff9500", fontWeight: 600 }}>{fp(it.price * it.quantity)}</span>
             </div>
           ))}
-          <div style={{ borderTop: `1px solid ${t.border}`, marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "space-between", fontWeight: 700, color: t.text }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: 15, color: t.text, marginTop: 8 }}>
             <span>Total</span><span style={{ color: "#ff9500" }}>{fp(order?.total)}</span>
           </div>
         </div>
 
-        {/* PDF reçu */}
         {order?.status === "delivered" && (
           <button style={{ ...S.primaryBtn, background: "#1a1a2e", border: "1px solid #4fc3f7", color: "#4fc3f7" }}
             onClick={() => generateReceiptPDF(order, items)}>
             📄 Télécharger le reçu PDF
           </button>
         )}
-        <div style={{ textAlign: "center", marginTop: 12, fontSize: 11, color: "#444" }}>Mis à jour en temps réel via Supabase</div>
+
+        <div style={{ textAlign: "center", marginTop: 8, fontSize: 11, color: "#444" }}>
+          🔄 Mis à jour automatiquement en temps réel
+        </div>
       </div>
     </div>
   );
@@ -645,21 +682,16 @@ export default function App() {
       cartItems.map(i => ({ order_id: order.id, menu_item_id: i.id, name: i.name, price: i.price, quantity: i.qty }))
     );
 
-    if (payMethod === "wave") window.open(WAVE_LINK, "_blank");
+    // Notif WhatsApp automatique au VENDEUR
+    const lignes = cartItems.map(i => `  • ${i.qty}× ${i.name} — ${fp(i.qty*i.price)}`).join("\n");
+    const msg = `🔥 NOUVELLE COMMANDE #${order.id}\n\n👤 ${user?.name || "Client"} | 📱 ${user?.phone || ""}\n${orderType === "table" ? `🪑 Table ${tableNum}` : "🛍️ À emporter"}\n💳 ${payMethod === "wave" ? "Wave" : "Espèces"}\n\n${lignes}\n\n💰 TOTAL : ${fp(totalPrice)}${note ? `\n📝 Note : ${note}` : ""}`;
+    window.open(\`https://wa.me/\${WHATSAPP_NUM}?text=\${encodeURIComponent(msg)}\`, "_blank");
 
-    let msg = `🛎️ *NOUVELLE COMMANDE #${order.id}*\n`;
-    msg += `👤 ${user?.name || "Client"} (${user?.phone||""})\n`;
-    msg += orderType === "table" ? `🪑 Table ${tableNum}\n` : `🛍️ À emporter\n`;
-    msg += `💳 ${payMethod === "wave" ? "🌊 Wave" : "💵 Espèces"}\n\n📋 *Articles :*\n`;
-    cartItems.forEach(i => { msg += `  • ${i.name} x${i.qty} — ${fp(i.qty*i.price)}\n`; });
-    msg += `\n💰 *Total : ${fp(totalPrice)}*`;
-    if (note) msg += `\n📝 ${note}`;
-    msg += `\n🔗 ID suivi : #${order.id}`;
-    window.open(`https://wa.me/${WHATSAPP_NUM}?text=${encodeURIComponent(msg)}`, "_blank");
+    if (payMethod === "wave") window.open(WAVE_LINK, "_blank");
 
     setTrackId(order.id);
     setSub(false);
-    setApp("confirm");
+    setApp("tracking");
   };
 
   const reset = () => { setCart({}); setNote(""); setPM("especes"); setTrackId(null); setApp("menu"); };
@@ -794,7 +826,7 @@ export default function App() {
                 <textarea style={{ ...S.input, resize: "vertical", background: t.card, border: `1px solid ${t.border}`, color: t.text }} placeholder="Sans oignon, extra sauce..." value={note} onChange={e => setNote(e.target.value)} rows={3} />
               </div>
               <button style={{ ...S.primaryBtn, background: payMethod==="wave"?"linear-gradient(135deg,#0072bc,#00a3e0)":"#25D366", opacity: submitting ? 0.7 : 1 }} onClick={sendOrder} disabled={submitting}>
-                {submitting ? "⏳ Envoi..." : payMethod==="wave" ? "🌊 Payer avec Wave & Envoyer" : "📲 Envoyer la commande"}
+                {submitting ? "⏳ Envoi..." : payMethod==="wave" ? "🌊 Payer avec Wave & Commander" : "✅ Confirmer ma commande"}
               </button>
               <button style={S.ghostBtn} onClick={() => setApp("menu")}>← Retour au menu</button>
             </div>
