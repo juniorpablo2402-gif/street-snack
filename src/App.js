@@ -114,9 +114,6 @@ function SplashScreen({ onDone }) {
 // AUTH — CONNEXION / INSCRIPTION
 // ══════════════════════════════════════════════════════════════════════════════
 function AuthScreen({ onAuth, onVendor }) {
-  const [mode, setMode]       = useState("login"); // login | register
-  const [email, setEmail]     = useState("");
-  const [password, setPass]   = useState("");
   const [name, setName]       = useState("");
   const [phone, setPhone]     = useState("");
   const [loading, setLoading] = useState(false);
@@ -134,22 +131,20 @@ function AuthScreen({ onAuth, onVendor }) {
 
   const handleAuth = async () => {
     setErr(""); setLoading(true);
-    if (mode === "register") {
-      if (!name.trim()) { setErr("Entrez votre prénom."); setLoading(false); return; }
-      if (!phone.trim() || phone.length < 8) { setErr("Numéro invalide."); setLoading(false); return; }
-      const { data, error } = await sb.auth.signUp({ email, password, options: { data: { name, phone } } });
-      if (error) { setErr(error.message); setLoading(false); return; }
-      // Connexion auto après inscription
-      const { data: d2, error: e2 } = await sb.auth.signInWithPassword({ email, password });
-      const uid = d2?.user?.id || data?.user?.id;
-      if (!uid) { setErr("Compte créé ! Connectez-vous maintenant."); setLoading(false); return; }
-      await sb.from("profiles").upsert({ id: uid, name, phone, role: "client" });
-      onAuth({ id: uid, name, phone, role: "client", email });
+    if (!name.trim()) { setErr("Entrez votre prénom."); setLoading(false); return; }
+    if (!phone.trim() || phone.replace(/\D/g,"").length < 8) { setErr("Numéro WhatsApp invalide."); setLoading(false); return; }
+    // Chercher si le client existe déjà
+    const { data: existing } = await sb.from("profiles").select("*").eq("phone", phone.replace(/\s/g,"")).maybeSingle();
+    if (existing) {
+      // Client connu — mise à jour du nom et connexion directe
+      await sb.from("profiles").update({ name }).eq("phone", phone.replace(/\s/g,""));
+      onAuth({ ...existing, name });
     } else {
-      const { data, error } = await sb.auth.signInWithPassword({ email, password });
-      if (error) { setErr("Email ou mot de passe incorrect."); setLoading(false); return; }
-      const { data: profile } = await sb.from("profiles").select("*").eq("id", data.user.id).single();
-      onAuth({ ...profile, email });
+      // Nouveau client — création du profil sans auth Supabase
+      const newId = crypto.randomUUID();
+      const { data: profile, error } = await sb.from("profiles").insert({ id: newId, name, phone: phone.replace(/\s/g,""), role: "client" }).select().single();
+      if (error) { setErr("Erreur. Réessayez."); setLoading(false); return; }
+      onAuth(profile);
     }
     setLoading(false);
   };
@@ -176,42 +171,23 @@ function AuthScreen({ onAuth, onVendor }) {
 
       <div onClick={handleLogoTap} style={{ width: 90, height: 90, borderRadius: "50%", background: "linear-gradient(135deg,#ff6b00,#ff9500)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 42, marginBottom: 16, boxShadow: "0 0 50px rgba(255,107,0,0.4)", cursor: "pointer", userSelect: "none", transform: taps > 0 ? "scale(0.9)" : "scale(1)", transition: "transform 0.1s" }}>🔥</div>
       <div style={{ fontSize: 26, fontWeight: 900, color: "#fff", letterSpacing: 2, marginBottom: 4 }}>THE STREET SNACK</div>
-      <div style={{ fontSize: 12, color: "#ff9500", marginBottom: 28, letterSpacing: 1 }}>{mode === "login" ? "Connectez-vous pour commander" : "Créez votre compte"}</div>
+      <div style={{ fontSize: 12, color: "#ff9500", marginBottom: 32, letterSpacing: 1 }}>Entrez pour commander 🍖</div>
 
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: 0, marginBottom: 20, background: "#1a1a1a", borderRadius: 12, padding: 4, width: "100%", maxWidth: 360 }}>
-        {[["login","Connexion"],["register","Inscription"]].map(([k,l]) => (
-          <button key={k} onClick={() => { setMode(k); setErr(""); }} style={{ flex: 1, padding: "10px", border: "none", cursor: "pointer", fontWeight: 700, fontSize: 14, borderRadius: 10, background: mode === k ? "#ff6b00" : "transparent", color: mode === k ? "#fff" : "#888", transition: "background 0.2s" }}>{l}</button>
-        ))}
-      </div>
-
-      <div style={{ width: "100%", maxWidth: 360, background: "#1a1a1a", borderRadius: 20, padding: 24, border: "1px solid #2a2a2a" }}>
-        {mode === "register" && (
-          <>
-            <div style={S.fieldGroup}>
-              <label style={S.label}>👤 Prénom *</label>
-              <input style={S.input} placeholder="Ex : Moussa" value={name} onChange={e => setName(e.target.value)} />
-            </div>
-            <div style={S.fieldGroup}>
-              <label style={S.label}>📱 WhatsApp *</label>
-              <input style={S.input} placeholder="0102030405" value={phone} onChange={e => setPhone(e.target.value)} type="tel" />
-            </div>
-          </>
-        )}
+      <div style={{ width: "100%", maxWidth: 360, background: "#1a1a1a", borderRadius: 20, padding: 28, border: "1px solid #2a2a2a" }}>
         <div style={S.fieldGroup}>
-          <label style={S.label}>📧 Email *</label>
-          <input style={S.input} placeholder="votre@email.com" value={email} onChange={e => setEmail(e.target.value)} type="email" />
+          <label style={S.label}>👤 Prénom *</label>
+          <input style={S.input} placeholder="Ex : Moussa" value={name} onChange={e => setName(e.target.value)} />
         </div>
         <div style={S.fieldGroup}>
-          <label style={S.label}>🔑 Mot de passe *</label>
-          <input style={S.input} placeholder="Min. 6 caractères" value={password} onChange={e => setPass(e.target.value)} type="password" />
+          <label style={S.label}>📱 Numéro WhatsApp *</label>
+          <input style={S.input} placeholder="Ex : 0102030405" value={phone} onChange={e => setPhone(e.target.value)} type="tel" />
         </div>
         {err && <div style={{ color: "#ff4444", fontSize: 12, marginBottom: 12 }}>⚠️ {err}</div>}
         <button style={{ ...S.primaryBtn, opacity: loading ? 0.7 : 1 }} onClick={handleAuth} disabled={loading}>
-          {loading ? "⏳ Chargement..." : mode === "login" ? "🚀 Se connecter" : "✅ Créer mon compte"}
+          {loading ? "⏳ Chargement..." : "🚀 Accéder au menu"}
         </button>
       </div>
-      <div style={{ marginTop: 16, fontSize: 11, color: "#444", textAlign: "center" }}>Données sécurisées via Supabase</div>
+      <div style={{ marginTop: 16, fontSize: 11, color: "#444", textAlign: "center" }}>Tapez 5x sur le logo 🔥 pour l'espace vendeur</div>
     </div>
   );
 }
