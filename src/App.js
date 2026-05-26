@@ -8,7 +8,8 @@ import { jsPDF } from "jspdf";
 const SUPABASE_URL  = "https://udgbxqnaocsroeadmbgh.supabase.co";
 const SUPABASE_KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVkZ2J4cW5hb2Nzcm9lYWRtYmdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2NjU5MzAsImV4cCI6MjA5NDI0MTkzMH0.WWXiOc-hBcbFnloTkoHIKUxhtbjobHa33UU3rmoSSsk";
 const CLOUDINARY_CLOUD = "de8r01l8w"; // eslint-disable-line no-unused-vars
-const WHATSAPP_NUM  = "2250104489636";
+const WHATSAPP_NUM  = "2250172164177"; // numéro pour envoyer commandes
+const WHATSAPP_RECEIVE = "2250104489636"; // numéro pour recevoir
 const WAVE_LINK     = "https://pay.wave.com/m/M_ci_JT9OY4oad86d/c/ci";
 const VENDOR_CODE   = "Lelama225";
 const APP_URL       = window.location.href.split("?")[0];
@@ -187,7 +188,7 @@ function AuthScreen({ onAuth, onVendor }) {
           {loading ? "⏳ Chargement..." : "🚀 Accéder au menu"}
         </button>
       </div>
-      <div style={{ marginTop: 16, fontSize: 11, color: "#444", textAlign: "center" }}>Tapez 5x sur le logo 🔥 pour l'espace vendeur</div>
+
     </div>
   );
 }
