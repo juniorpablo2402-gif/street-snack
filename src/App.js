@@ -8,8 +8,6 @@ import { jsPDF } from "jspdf";
 const SUPABASE_URL  = "https://udgbxqnaocsroeadmbgh.supabase.co";
 const SUPABASE_KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVkZ2J4cW5hb2Nzcm9lYWRtYmdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2NjU5MzAsImV4cCI6MjA5NDI0MTkzMH0.WWXiOc-hBcbFnloTkoHIKUxhtbjobHa33UU3rmoSSsk";
 const CLOUDINARY_CLOUD = "de8r01l8w"; // eslint-disable-line no-unused-vars
-const WHATSAPP_NUM  = "2250172164177"; // numéro pour envoyer commandes
-const WHATSAPP_RECEIVE = "2250104489636"; // numéro pour recevoir
 const WAVE_LINK     = "https://pay.wave.com/m/M_ci_JT9OY4oad86d/c/ci";
 const VENDOR_CODE   = "Lelama225";
 const APP_URL       = window.location.href.split("?")[0];
@@ -133,15 +131,12 @@ function AuthScreen({ onAuth, onVendor }) {
   const handleAuth = async () => {
     setErr(""); setLoading(true);
     if (!name.trim()) { setErr("Entrez votre prénom."); setLoading(false); return; }
-    if (!phone.trim() || phone.replace(/\D/g,"").length < 8) { setErr("Numéro WhatsApp invalide."); setLoading(false); return; }
-    // Chercher si le client existe déjà
+    if (!phone.trim() || phone.replace(/\D/g,"").length < 8) { setErr("Numéro invalide."); setLoading(false); return; }
     const { data: existing } = await sb.from("profiles").select("*").eq("phone", phone.replace(/\s/g,"")).maybeSingle();
     if (existing) {
-      // Client connu — mise à jour du nom et connexion directe
       await sb.from("profiles").update({ name }).eq("phone", phone.replace(/\s/g,""));
       onAuth({ ...existing, name });
     } else {
-      // Nouveau client — création du profil sans auth Supabase
       const newId = crypto.randomUUID();
       const { data: profile, error } = await sb.from("profiles").insert({ id: newId, name, phone: phone.replace(/\s/g,""), role: "client" }).select().single();
       if (error) { setErr("Erreur. Réessayez."); setLoading(false); return; }
@@ -180,7 +175,7 @@ function AuthScreen({ onAuth, onVendor }) {
           <input style={S.input} placeholder="Ex : Moussa" value={name} onChange={e => setName(e.target.value)} />
         </div>
         <div style={S.fieldGroup}>
-          <label style={S.label}>📱 Numéro WhatsApp *</label>
+          <label style={S.label}>📱 Numéro de téléphone *</label>
           <input style={S.input} placeholder="Ex : 0102030405" value={phone} onChange={e => setPhone(e.target.value)} type="tel" />
         </div>
         {err && <div style={{ color: "#ff4444", fontSize: 12, marginBottom: 12 }}>⚠️ {err}</div>}
@@ -267,9 +262,7 @@ function OrderTracking({ orderId, onBack }) {
         {/* Barre de progression style Glovo */}
         <div style={{ background: t.card, borderRadius: 16, padding: "16px 12px", marginBottom: 16, border: `1px solid ${t.border}` }}>
           <div style={{ position: "relative", paddingTop: 8 }}>
-            {/* Ligne de fond */}
             <div style={{ position: "absolute", top: 20, left: "8%", right: "8%", height: 4, background: t.border, borderRadius: 4 }} />
-            {/* Ligne de progression */}
             <div style={{ position: "absolute", top: 20, left: "8%", height: 4, borderRadius: 4, background: "linear-gradient(90deg, #ff6b00, #ff9500)", transition: "width 0.8s ease", width: currentIdx === 0 ? "0%" : `${(currentIdx / (GLOVO_STEPS.length - 1)) * 84}%` }} />
             <div style={{ display: "flex", justifyContent: "space-between", position: "relative", zIndex: 2 }}>
               {GLOVO_STEPS.map((step, i) => (
@@ -334,7 +327,7 @@ function VendorDashboard({ onExit }) {
   const [filter, setFilter]   = useState("active");
   const [qrTable, setQrTable] = useState(null);
   const [qrImg, setQrImg]     = useState("");
-  const [statsRange, setStatsRange] = useState("week"); // day | week | month
+  const [statsRange, setStatsRange] = useState("week");
   const { dark, toggle } = useTheme();
   const t = dark ? D : L;
 
@@ -357,14 +350,10 @@ function VendorDashboard({ onExit }) {
     return () => sb.removeChannel(channel);
   }, [fetchOrders, fetchMenu]);
 
+  // Mise à jour statut — sans WhatsApp, 100% in-app
   const updStatus = async (order, ns) => {
     await sb.from("orders").update({ status: ns }).eq("id", order.id);
     setOrders(p => p.map(o => o.id === order.id ? { ...o, status: ns } : o));
-    // Notif WhatsApp si prête
-    if (ns === "ready") {
-      let msg = `🔔 *Votre commande est prête !*\n👤 ${order.client_name}\n💰 ${fp(order.total)}\nVenez la récupérer au comptoir.`;
-      window.open(`https://wa.me/${order.client_phone?.replace(/\D/g,"")}?text=${encodeURIComponent(msg)}`, "_blank");
-    }
   };
 
   const updStock = async (id, qty) => {
@@ -400,7 +389,6 @@ function VendorDashboard({ onExit }) {
   const revenue     = delivered.reduce((s, o) => s + (o.total || 0), 0);
   const avgOrder    = delivered.length ? Math.round(revenue / delivered.length) : 0;
 
-  // Articles les plus commandés
   const itemCount = {};
   statsOrders.forEach(o => (o.order_items || []).forEach(it => {
     itemCount[it.name] = (itemCount[it.name] || 0) + it.quantity;
@@ -616,7 +604,7 @@ function VendorDashboard({ onExit }) {
 // ══════════════════════════════════════════════════════════════════════════════
 export default function App() {
   const [dark, setDark]     = useState(true);
-  const [appState, setApp]  = useState("splash"); // splash | auth | menu | checkout | confirm | tracking | vendor
+  const [appState, setApp]  = useState("splash");
   const [user, setUser]     = useState(null);
   const [menu, setMenu]     = useState([]);
   const [cart, setCart]     = useState({});
@@ -629,14 +617,12 @@ export default function App() {
   const [submitting, setSub]  = useState(false);
   const t = dark ? D : L;
 
-  // Lire table depuis URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tbl = params.get("table");
     if (tbl) { setTN(tbl); setOT("table"); }
   }, []);
 
-  // Charger menu depuis Supabase
   useEffect(() => {
     sb.from("menu_items").select("*").eq("available", true).order("category").order("sort_order")
       .then(({ data }) => { if (data) setMenu(data); });
@@ -682,11 +668,7 @@ export default function App() {
       cartItems.map(i => ({ order_id: order.id, menu_item_id: i.id, name: i.name, price: i.price, quantity: i.qty }))
     );
 
-    // Notif WhatsApp automatique au VENDEUR
-    const lignes = cartItems.map(i => `  • ${i.qty}× ${i.name} — ${fp(i.qty*i.price)}`).join("\n");
-    const msg = `🔥 NOUVELLE COMMANDE #${order.id}\n\n👤 ${user?.name || "Client"} | 📱 ${user?.phone || ""}\n${orderType === "table" ? `🪑 Table ${tableNum}` : "🛍️ À emporter"}\n💳 ${payMethod === "wave" ? "Wave" : "Espèces"}\n\n${lignes}\n\n💰 TOTAL : ${fp(totalPrice)}${note ? `\n📝 Note : ${note}` : ""}`;
-    window.open(`https://wa.me/${WHATSAPP_NUM}?text=${encodeURIComponent(msg)}`, "_blank");
-
+    // Redirection Wave si paiement Wave
     if (payMethod === "wave") window.open(WAVE_LINK, "_blank");
 
     setTrackId(order.id);
@@ -705,7 +687,7 @@ export default function App() {
       {appState === "vendor"   && <VendorDashboard onExit={() => setApp(user ? "menu" : "auth")} />}
       {appState === "tracking" && <OrderTracking orderId={trackId} onBack={() => setApp("menu")} />}
 
-      {["menu","checkout","confirm"].includes(appState) && (
+      {["menu","checkout"].includes(appState) && (
         <div style={{ ...S.root, background: t.bg, color: t.text }}>
 
           {/* Header */}
@@ -829,28 +811,6 @@ export default function App() {
                 {submitting ? "⏳ Envoi..." : payMethod==="wave" ? "🌊 Payer avec Wave & Commander" : "✅ Confirmer ma commande"}
               </button>
               <button style={S.ghostBtn} onClick={() => setApp("menu")}>← Retour au menu</button>
-            </div>
-          )}
-
-          {/* ── CONFIRM ── */}
-          {appState === "confirm" && (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "40px 24px", textAlign: "center" }}>
-              <div style={{ fontSize: 72, marginBottom: 16 }}>✅</div>
-              <div style={{ fontSize: 24, fontWeight: 800, marginBottom: 10, color: "#25D366" }}>Commande envoyée !</div>
-              <div style={{ fontSize: 14, color: "#888", marginBottom: 20, lineHeight: 1.7 }}>
-                {payMethod === "wave" ? "Vérifiez que votre paiement Wave a été effectué.\nLe vendeur confirme après réception." : "Règlement en espèces sur place."}<br />
-                Nous préparons votre commande !
-              </div>
-              {trackId && (
-                <div style={{ background: t.card, border: "1px solid #4fc3f7", borderRadius: 14, padding: 18, marginBottom: 20, width: "100%", boxSizing: "border-box" }}>
-                  <div style={{ fontSize: 13, color: "#4fc3f7", marginBottom: 8 }}>🔍 Suivez votre commande en direct</div>
-                  <div style={{ fontSize: 26, fontWeight: 900, color: t.text, letterSpacing: 3 }}>#{trackId}</div>
-                  <button style={{ ...S.primaryBtn, background: "#0d1f2e", color: "#4fc3f7", border: "1px solid #4fc3f7", marginTop: 12, marginBottom: 0 }} onClick={() => setApp("tracking")}>
-                    📡 Suivi en temps réel
-                  </button>
-                </div>
-              )}
-              <button style={S.ghostBtn} onClick={reset}>Passer une nouvelle commande</button>
             </div>
           )}
 
