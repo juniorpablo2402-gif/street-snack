@@ -685,7 +685,7 @@ export default function App() {
     // Notif WhatsApp automatique au VENDEUR
     const lignes = cartItems.map(i => `  • ${i.qty}× ${i.name} — ${fp(i.qty*i.price)}`).join("\n");
     const msg = `🔥 NOUVELLE COMMANDE #${order.id}\n\n👤 ${user?.name || "Client"} | 📱 ${user?.phone || ""}\n${orderType === "table" ? `🪑 Table ${tableNum}` : "🛍️ À emporter"}\n💳 ${payMethod === "wave" ? "Wave" : "Espèces"}\n\n${lignes}\n\n💰 TOTAL : ${fp(totalPrice)}${note ? `\n📝 Note : ${note}` : ""}`;
-    window.open(\`https://wa.me/\${WHATSAPP_NUM}?text=\${encodeURIComponent(msg)}\`, "_blank");
+    window.open(`https://wa.me/${WHATSAPP_NUM}?text=${encodeURIComponent(msg)}`, "_blank");
 
     if (payMethod === "wave") window.open(WAVE_LINK, "_blank");
 
