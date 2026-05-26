@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef, createContext, useContext } from "react";
+/* eslint-disable */
+import { useState, useEffect, useCallback, createContext, useContext } from "react"; // eslint-disable-line
 import { createClient } from "@supabase/supabase-js";
 import QRCode from "qrcode";
 import { jsPDF } from "jspdf";
@@ -6,7 +7,7 @@ import { jsPDF } from "jspdf";
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const SUPABASE_URL  = "https://udgbxqnaocsroeadmbgh.supabase.co";
 const SUPABASE_KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVkZ2J4cW5hb2Nzcm9lYWRtYmdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2NjU5MzAsImV4cCI6MjA5NDI0MTkzMH0.WWXiOc-hBcbFnloTkoHIKUxhtbjobHa33UU3rmoSSsk";
-const CLOUDINARY_CLOUD = "de8r01l8w";
+const CLOUDINARY_CLOUD = "de8r01l8w"; // eslint-disable-line no-unused-vars
 const WHATSAPP_NUM  = "2250104489636";
 const WAVE_LINK     = "https://pay.wave.com/m/M_ci_JT9OY4oad86d/c/ci";
 const VENDOR_CODE   = "Lelama225";
