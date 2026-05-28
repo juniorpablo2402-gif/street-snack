@@ -11,6 +11,10 @@ const APP_URL       = window.location.href.split("?")[0];
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// ─── THÈMES (définis tôt pour être accessibles partout) ───────────────────────
+const D = { bg:"#0f0f0f", card:"#1a1a1a", border:"#2a2a2a", text:"#f0f0f0", muted:"#888" };
+const L = { bg:"#f5f5f5", card:"#ffffff", border:"#e0e0e0", text:"#111111", muted:"#666666" };
+
 // ─── THEME CONTEXT ───────────────────────────────────────────────────────────
 const ThemeCtx = createContext({ dark: true, toggle: () => {} });
 const useTheme = () => useContext(ThemeCtx);
@@ -993,6 +997,3 @@ export default function App() {
   );
 }
 
-// ─── THÈMES ──────────────────────────────────────────────────────────────────
-const D = { bg:"#0f0f0f", card:"#1a1a1a", border:"#2a2a2a", text:"#f0f0f0", muted:"#888" };
-const L = { bg:"#f5f5f5", card:"#ffffff", border:"#e0e0e0", text:"#111111", muted:"#666666" };
