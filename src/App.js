@@ -772,7 +772,7 @@ export default function App() {
     <ThemeCtx.Provider value={{ dark, toggle: () => setDark(p => !p) }}>
       {appState === "auth"     && <AuthScreen onAuth={u => { setUser(u); localStorage.setItem("ss_user", JSON.stringify(u)); setApp("menu"); }} />}
       {appState === "tracking" && <OrderTracking orderId={trackId} onBack={() => setApp("menu")} />}
-      {appState === "history"  && <OrderHistory user={user} onViewOrder={id => { setTrackId(id); setApp("tracking"); }} onBack={() => setApp("menu")} />}
+      {appState === "history"  && <OrderHistory user={user || JSON.parse(localStorage.getItem("ss_user") || "{}")} onViewOrder={id => { setTrackId(id); setApp("tracking"); }} onBack={() => setApp("menu")} />}
 
       {["menu","checkout"].includes(appState) && (
         <div style={{ fontFamily:"'Sora','Segoe UI',sans-serif", minHeight:"100vh", background: t.bg, color: t.text, paddingBottom: 100 }}>
@@ -790,7 +790,7 @@ export default function App() {
               <div style={{ display:"flex", gap:6 }}>
                 <button onClick={() => setDark(p=>!p)} style={{ background: t.card, border:`1px solid ${t.border}`, color: t.text, borderRadius:10, width:34, height:34, fontSize:16, cursor:"pointer" }}>{dark?"☀️":"🌙"}</button>
                 {/* Bouton commandes style Glovo */}
-                <button onClick={() => { if (user) setApp("history"); }} style={{ background: t.card, border:`1px solid ${t.border}`, color: t.text, borderRadius:10, width:34, height:34, fontSize:16, cursor:"pointer", position:"relative" }}>
+                <button onClick={() => setApp("history")} style={{ background: t.card, border:`1px solid ${t.border}`, color: t.text, borderRadius:10, width:34, height:34, fontSize:16, cursor:"pointer", position:"relative" }}>
                   📦
                 </button>
                 {user && <button onClick={() => { setUser(null); localStorage.removeItem("ss_user"); setApp("auth"); }} style={{ background: t.card, border:`1px solid ${t.border}`, color: t.muted, borderRadius:10, width:34, height:34, fontSize:14, cursor:"pointer" }}>🚪</button>}
