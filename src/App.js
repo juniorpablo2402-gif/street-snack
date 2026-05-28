@@ -7,7 +7,6 @@ import { jsPDF } from "jspdf";
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const SUPABASE_URL  = "https://udgbxqnaocsroeadmbgh.supabase.co";
 const SUPABASE_KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVkZ2J4cW5hb2Nzcm9lYWRtYmdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2NjU5MzAsImV4cCI6MjA5NDI0MTkzMH0.WWXiOc-hBcbFnloTkoHIKUxhtbjobHa33UU3rmoSSsk";
-const WAVE_LINK     = "https://pay.wave.com/m/M_ci_JT9OY4oad86d/c/ci";
 const APP_URL       = window.location.href.split("?")[0];
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -28,7 +27,6 @@ const ORDER_STATUSES = {
   ready:     { label: "Prête !",         color: "#25D366", bg: "#0d1f0d", icon: "🔔" },
   delivered: { label: "Livrée",          color: "#888",    bg: "#111",    icon: "🎉" },
 };
-const STEPS_LIST  = ["pending","confirmed","preparing","ready","delivered"];
 const NEXT_STATUS = { pending:"confirmed", confirmed:"preparing", preparing:"ready", ready:"delivered" };
 const NEXT_LABEL  = { pending:"✅ Confirmer", confirmed:"👨‍🍳 Préparer", preparing:"🔔 Prête !", ready:"🎉 Livrée" };
 
@@ -108,88 +106,90 @@ function SplashScreen({ onDone }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// AUTH — CONNEXION / INSCRIPTION
+// AUTH — STYLE GLOVO
 // ══════════════════════════════════════════════════════════════════════════════
 function AuthScreen({ onAuth }) {
-  const [mode, setMode]       = useState("login"); // login | register
-  const [email, setEmail]     = useState("");
-  const [password, setPass]   = useState("");
-  const [name, setName]       = useState("");
-  const [phone, setPhone]     = useState("");
+  const [name, setName]   = useState("");
+  const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
-  const [err, setErr]         = useState("");
-  const [taps, setTaps] = useState(0);
+  const [err, setErr]     = useState("");
+  const [step, setStep]   = useState("name"); // name | phone
 
-
+  const goNext = () => {
+    if (!name.trim() || name.trim().length < 2) { setErr("Entrez votre prénom (min. 2 caractères)"); return; }
+    setErr(""); setStep("phone");
+  };
 
   const handleAuth = async () => {
     setErr(""); setLoading(true);
-    if (mode === "register") {
-      if (!name.trim()) { setErr("Entrez votre prénom."); setLoading(false); return; }
-      if (!phone.trim() || phone.length < 8) { setErr("Numéro invalide."); setLoading(false); return; }
-      const { data, error } = await sb.auth.signUp({ email, password, options: { data: { name, phone } } });
-      if (error) { setErr(error.message); setLoading(false); return; }
-      if (data.user) {
-        await sb.from("profiles").upsert({ id: data.user.id, name, phone, role: "client" });
-        onAuth({ id: data.user.id, name, phone, role: "client", email });
-      }
+    if (!phone.trim() || phone.replace(/\D/g,"").length < 8) { setErr("Numéro invalide (min. 8 chiffres)"); setLoading(false); return; }
+    const cleanPhone = phone.replace(/\s/g,"");
+    const { data: existing } = await sb.from("profiles").select("*").eq("phone", cleanPhone).maybeSingle();
+    if (existing) {
+      await sb.from("profiles").update({ name }).eq("phone", cleanPhone);
+      onAuth({ ...existing, name });
     } else {
-      const { data, error } = await sb.auth.signInWithPassword({ email, password });
-      if (error) { setErr("Email ou mot de passe incorrect."); setLoading(false); return; }
-      const { data: profile } = await sb.from("profiles").select("*").eq("id", data.user.id).single();
-      onAuth({ ...profile, email });
+      const { data: profile, error } = await sb.from("profiles").insert({ id: crypto.randomUUID(), name, phone: cleanPhone, role: "client" }).select().single();
+      if (error) { setErr("Erreur. Réessayez."); setLoading(false); return; }
+      onAuth(profile);
     }
     setLoading(false);
   };
 
-
-
   return (
-    <div style={{ minHeight: "100vh", background: "#0f0f0f", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
-
-
-      <div style={{ width: 90, height: 90, borderRadius: "50%", background: "linear-gradient(135deg,#ff6b00,#ff9500)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 42, marginBottom: 16, boxShadow: "0 0 50px rgba(255,107,0,0.4)", cursor: "pointer", userSelect: "none", transform: taps > 0 ? "scale(0.9)" : "scale(1)", transition: "transform 0.1s" }}>🔥</div>
-      <div style={{ fontSize: 26, fontWeight: 900, color: "#fff", letterSpacing: 2, marginBottom: 4 }}>THE STREET SNACK</div>
-      <div style={{ fontSize: 12, color: "#ff9500", marginBottom: 28, letterSpacing: 1 }}>{mode === "login" ? "Connectez-vous pour commander" : "Créez votre compte"}</div>
-
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: 0, marginBottom: 20, background: "#1a1a1a", borderRadius: 12, padding: 4, width: "100%", maxWidth: 360 }}>
-        {[["login","Connexion"],["register","Inscription"]].map(([k,l]) => (
-          <button key={k} onClick={() => { setMode(k); setErr(""); }} style={{ flex: 1, padding: "10px", border: "none", cursor: "pointer", fontWeight: 700, fontSize: 14, borderRadius: 10, background: mode === k ? "#ff6b00" : "transparent", color: mode === k ? "#fff" : "#888", transition: "background 0.2s" }}>{l}</button>
-        ))}
+    <div style={{ minHeight:"100vh", background:"#0f0f0f", display:"flex", flexDirection:"column" }}>
+      {/* Header orange style Glovo */}
+      <div style={{ background:"linear-gradient(160deg,#ff6b00 0%,#ff9500 100%)", padding:"48px 24px 32px", textAlign:"center" }}>
+        <div style={{ width:72, height:72, borderRadius:"50%", background:"rgba(255,255,255,0.2)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:36, margin:"0 auto 16px", backdropFilter:"blur(10px)" }}>🔥</div>
+        <div style={{ fontSize:24, fontWeight:900, color:"#fff", letterSpacing:1, marginBottom:4 }}>THE STREET SNACK</div>
+        <div style={{ fontSize:13, color:"rgba(255,255,255,0.85)" }}>Fast-food • Commande rapide</div>
       </div>
 
-      <div style={{ width: "100%", maxWidth: 360, background: "#1a1a1a", borderRadius: 20, padding: 24, border: "1px solid #2a2a2a" }}>
-        {mode === "register" && (
+      {/* Formulaire */}
+      <div style={{ flex:1, background:"#0f0f0f", borderRadius:"24px 24px 0 0", marginTop:-20, padding:"32px 24px" }}>
+        {step === "name" ? (
           <>
-            <div style={S.fieldGroup}>
-              <label style={S.label}>👤 Prénom *</label>
-              <input style={S.input} placeholder="Ex : Moussa" value={name} onChange={e => setName(e.target.value)} />
-            </div>
-            <div style={S.fieldGroup}>
-              <label style={S.label}>📱 WhatsApp *</label>
-              <input style={S.input} placeholder="0102030405" value={phone} onChange={e => setPhone(e.target.value)} type="tel" />
-            </div>
+            <div style={{ fontSize:22, fontWeight:800, color:"#fff", marginBottom:6 }}>Bonjour ! 👋</div>
+            <div style={{ fontSize:14, color:"#888", marginBottom:28 }}>Comment tu t'appelles ?</div>
+            <input
+              autoFocus
+              value={name}
+              onChange={e => { setName(e.target.value); setErr(""); }}
+              onKeyDown={e => e.key === "Enter" && goNext()}
+              placeholder="Ton prénom"
+              style={{ width:"100%", background:"#1a1a1a", border:`2px solid ${err?"#ff4444":name?"#ff6b00":"#2a2a2a"}`, borderRadius:14, padding:"16px", color:"#fff", fontSize:18, fontWeight:600, boxSizing:"border-box", outline:"none", marginBottom:12 }}
+            />
+            {err && <div style={{ color:"#ff4444", fontSize:13, marginBottom:12 }}>⚠️ {err}</div>}
+            <button onClick={goNext} style={{ width:"100%", background:"#ff6b00", color:"#fff", border:"none", borderRadius:14, padding:"16px", fontSize:16, fontWeight:700, cursor:"pointer", boxShadow:"0 6px 20px rgba(255,107,0,0.35)" }}>
+              Continuer →
+            </button>
+          </>
+        ) : (
+          <>
+            <button onClick={() => { setStep("name"); setErr(""); }} style={{ background:"transparent", border:"none", color:"#888", fontSize:14, cursor:"pointer", marginBottom:20, padding:0, display:"flex", alignItems:"center", gap:6 }}>
+              ← Retour
+            </button>
+            <div style={{ fontSize:22, fontWeight:800, color:"#fff", marginBottom:6 }}>Ton numéro 📱</div>
+            <div style={{ fontSize:14, color:"#888", marginBottom:28 }}>Pour retrouver tes commandes</div>
+            <input
+              autoFocus
+              value={phone}
+              onChange={e => { setPhone(e.target.value); setErr(""); }}
+              onKeyDown={e => e.key === "Enter" && handleAuth()}
+              placeholder="Ex : 0102030405"
+              type="tel"
+              style={{ width:"100%", background:"#1a1a1a", border:`2px solid ${err?"#ff4444":phone?"#ff6b00":"#2a2a2a"}`, borderRadius:14, padding:"16px", color:"#fff", fontSize:18, fontWeight:600, boxSizing:"border-box", outline:"none", marginBottom:12 }}
+            />
+            {err && <div style={{ color:"#ff4444", fontSize:13, marginBottom:12 }}>⚠️ {err}</div>}
+            <button onClick={handleAuth} disabled={loading} style={{ width:"100%", background: loading?"#555":"#ff6b00", color:"#fff", border:"none", borderRadius:14, padding:"16px", fontSize:16, fontWeight:700, cursor: loading?"not-allowed":"pointer", boxShadow:"0 6px 20px rgba(255,107,0,0.35)" }}>
+              {loading ? "⏳ Chargement..." : `Accéder au menu 🍖`}
+            </button>
           </>
         )}
-        <div style={S.fieldGroup}>
-          <label style={S.label}>📧 Email *</label>
-          <input style={S.input} placeholder="votre@email.com" value={email} onChange={e => setEmail(e.target.value)} type="email" />
-        </div>
-        <div style={S.fieldGroup}>
-          <label style={S.label}>🔑 Mot de passe *</label>
-          <input style={S.input} placeholder="Min. 6 caractères" value={password} onChange={e => setPass(e.target.value)} type="password" />
-        </div>
-        {err && <div style={{ color: "#ff4444", fontSize: 12, marginBottom: 12 }}>⚠️ {err}</div>}
-        <button style={{ ...S.primaryBtn, opacity: loading ? 0.7 : 1 }} onClick={handleAuth} disabled={loading}>
-          {loading ? "⏳ Chargement..." : mode === "login" ? "🚀 Se connecter" : "✅ Créer mon compte"}
-        </button>
       </div>
-      <div style={{ marginTop: 16, fontSize: 11, color: "#444", textAlign: "center" }}>Données sécurisées via Supabase</div>
     </div>
   );
 }
-
 
 // ══════════════════════════════════════════════════════════════════════════════
 // HISTORIQUE COMMANDES CLIENT (style Glovo)
@@ -681,35 +681,35 @@ function VendorDashboard({ onExit }) {
 // APP PRINCIPALE — MENU CLIENT
 // ══════════════════════════════════════════════════════════════════════════════
 export default function App() {
-  const [dark, setDark]     = useState(true);
-  const [appState, setApp]  = useState("splash"); // splash | auth | menu | checkout | confirm | tracking | vendor
-  const [user, setUser]     = useState(null);
-  const [menu, setMenu]     = useState([]);
-  const [cart, setCart]     = useState({});
-  const [orderType, setOT]  = useState("table");
-  const [tableNum, setTN]   = useState("");
-  const [note, setNote]     = useState("");
-  const [payMethod, setPM]  = useState("especes");
+  const [dark, setDark]       = useState(true);
+  const [appState, setApp]    = useState("splash");
+  const [user, setUser]       = useState(null);
+  const [menu, setMenu]       = useState([]);
+  const [cart, setCart]       = useState({});
+  const [selCat, setSelCat]   = useState(null);
+  const [orderType, setOT]    = useState("table");
+  const [tableNum, setTN]     = useState("");
+  const [note, setNote]       = useState("");
   const [trackId, setTrackId] = useState(null);
   const [submitting, setSub]  = useState(false);
+  const [search, setSearch]   = useState("");
   const t = dark ? D : L;
 
-  // Lire table depuis URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tbl = params.get("table");
     if (tbl) { setTN(tbl); setOT("table"); }
   }, []);
 
-  // Charger menu depuis Supabase
   useEffect(() => {
     sb.from("menu_items").select("*").eq("available", true).order("category").order("sort_order")
-      .then(({ data }) => { if (data) setMenu(data); });
+      .then(({ data }) => { if (data) { setMenu(data); setSelCat(data[0]?.category || null); } });
   }, []);
 
   const cartItems  = Object.values(cart);
   const totalQty   = cartItems.reduce((s,i) => s+i.qty, 0);
   const totalPrice = cartItems.reduce((s,i) => s+i.qty*i.price, 0);
+  const categories = [...new Set(menu.map(m => m.category))];
 
   const addItem = item => {
     if (item.stock === 0) return;
@@ -722,205 +722,260 @@ export default function App() {
     return u;
   });
 
-  const categories = [...new Set(menu.map(m => m.category))];
-
   const sendOrder = async () => {
     if (orderType === "table" && !tableNum.trim()) { alert("Numéro de table requis."); return; }
     setSub(true);
-
     const { data: order, error } = await sb.from("orders").insert({
       client_id:      user?.id || null,
       client_name:    user?.name || "Client",
       client_phone:   user?.phone || "",
       table_number:   orderType === "table" ? parseInt(tableNum) : null,
       order_type:     orderType,
-      payment_method: payMethod,
-      payment_status: payMethod === "wave" ? "pending" : "confirmed",
+      payment_method: "especes",
+      payment_status: "confirmed",
       status:         "pending",
       note,
       total:          totalPrice,
     }).select().single();
-
     if (error || !order) { alert("Erreur lors de la commande."); setSub(false); return; }
-
     await sb.from("order_items").insert(
       cartItems.map(i => ({ order_id: order.id, menu_item_id: i.id, name: i.name, price: i.price, quantity: i.qty }))
     );
-
-    if (payMethod === "wave") window.open(WAVE_LINK, "_blank");
-
-    let msg = `🛎️ *NOUVELLE COMMANDE #${order.id}*\n`;
-    msg += `👤 ${user?.name || "Client"} (${user?.phone||""})\n`;
-    msg += orderType === "table" ? `🪑 Table ${tableNum}\n` : `🛍️ À emporter\n`;
-    msg += `💳 ${payMethod === "wave" ? "🌊 Wave" : "💵 Espèces"}\n\n📋 *Articles :*\n`;
-    cartItems.forEach(i => { msg += `  • ${i.name} x${i.qty} — ${fp(i.qty*i.price)}\n`; });
-    msg += `\n💰 *Total : ${fp(totalPrice)}*`;
-    if (note) msg += `\n📝 ${note}`;
-    msg += `\n🔗 ID suivi : #${order.id}`;
-
     setTrackId(order.id);
+    setCart({});
+    setNote("");
     setSub(false);
-    setApp("confirm");
+    setApp("tracking");
   };
 
-  const reset = () => { setCart({}); setNote(""); setPM("especes"); setTrackId(null); setApp("menu"); };
+  const filteredMenu = search.trim()
+    ? menu.filter(m => m.name.toLowerCase().includes(search.toLowerCase()))
+    : menu.filter(m => m.category === selCat);
 
   // ── ROUTING ──
-  if (appState === "splash") return <ThemeCtx.Provider value={{ dark, toggle: ()=>setDark(p=>!p) }}><SplashScreen onDone={() => setApp("auth")} /></ThemeCtx.Provider>;
+  if (appState === "splash") return (
+    <ThemeCtx.Provider value={{ dark, toggle: ()=>setDark(p=>!p) }}>
+      <SplashScreen onDone={() => setApp("auth")} />
+    </ThemeCtx.Provider>
+  );
 
   return (
     <ThemeCtx.Provider value={{ dark, toggle: () => setDark(p => !p) }}>
       {appState === "auth"     && <AuthScreen onAuth={u => { setUser(u); setApp("menu"); }} />}
       {appState === "tracking" && <OrderTracking orderId={trackId} onBack={() => setApp("menu")} />}
-      {appState === "history"  && <OrderHistory user={user} onViewOrder={(id) => { setTrackId(id); setApp("tracking"); }} onBack={() => setApp("menu")} />}
+      {appState === "history"  && <OrderHistory user={user} onViewOrder={id => { setTrackId(id); setApp("tracking"); }} onBack={() => setApp("menu")} />}
 
-      {["menu","checkout","confirm"].includes(appState) && (
-        <div style={{ ...S.root, background: t.bg, color: t.text }}>
+      {["menu","checkout"].includes(appState) && (
+        <div style={{ fontFamily:"'Sora','Segoe UI',sans-serif", minHeight:"100vh", background: t.bg, color: t.text, paddingBottom: 100 }}>
 
-          {/* Header */}
-          <div style={S.header}>
-            <div style={S.logoRow}>
-              <span style={S.logoEmoji}>🔥</span>
-              <div><div style={S.logoName}>THE STREET SNACK</div><div style={S.logoTagline}>{user ? `Bonjour ${user.name} 👋` : "Fast-food • Commande rapide"}</div></div>
-              <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-                <button onClick={() => setDark(p=>!p)} style={{ ...S.exitBtn, fontSize: 18, background: "rgba(255,255,255,0.15)" }}>{dark?"☀️":"🌙"}</button>
-                {user && <button onClick={() => { setUser(null); setApp("auth"); }} style={S.exitBtn} title="Déconnexion">🚪</button>}
+          {/* ════ HEADER GLOVO ════ */}
+          <div style={{ background: dark ? "#111" : "#fff", padding:"14px 16px", position:"sticky", top:0, zIndex:20, borderBottom:`1px solid ${t.border}`, boxShadow:"0 2px 12px rgba(0,0,0,0.15)" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom: appState==="menu" ? 12 : 0 }}>
+              <div style={{ width:36, height:36, borderRadius:"50%", background:"linear-gradient(135deg,#ff6b00,#ff9500)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>🔥</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:15, fontWeight:900, color: t.text, letterSpacing:0.5 }}>THE STREET SNACK</div>
+                <div style={{ fontSize:11, color:"#ff9500", fontWeight:600 }}>
+                  {user ? `👋 ${user.name}` : "Fast-food • Commande rapide"}
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:6 }}>
+                <button onClick={() => setDark(p=>!p)} style={{ background: t.card, border:`1px solid ${t.border}`, color: t.text, borderRadius:10, width:34, height:34, fontSize:16, cursor:"pointer" }}>{dark?"☀️":"🌙"}</button>
+                {/* Bouton commandes style Glovo */}
+                <button onClick={() => setApp("history")} style={{ background: t.card, border:`1px solid ${t.border}`, color: t.text, borderRadius:10, width:34, height:34, fontSize:16, cursor:"pointer", position:"relative" }}>
+                  📦
+                  {/* Badge si commande en cours — optionnel */}
+                </button>
+                {user && <button onClick={() => { setUser(null); setApp("auth"); }} style={{ background: t.card, border:`1px solid ${t.border}`, color: t.muted, borderRadius:10, width:34, height:34, fontSize:14, cursor:"pointer" }}>🚪</button>}
               </div>
             </div>
+
+            {/* Barre de recherche style Glovo */}
+            {appState === "menu" && (
+              <div style={{ position:"relative" }}>
+                <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", fontSize:16, color:"#888" }}>🔍</span>
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Rechercher un plat..."
+                  style={{ width:"100%", background: t.card, border:`1px solid ${t.border}`, borderRadius:12, padding:"10px 12px 10px 38px", color: t.text, fontSize:14, boxSizing:"border-box", outline:"none" }}
+                />
+              </div>
+            )}
           </div>
 
-          {/* ── MENU ── */}
+          {/* ════ MENU ════ */}
           {appState === "menu" && (
             <>
-              <div style={S.content}>
-                {/* Bouton Mes commandes style Glovo */}
-                <button onClick={() => setApp("history")} style={{ width: "100%", background: t.card, border: `1px solid ${t.border}`, borderRadius: 14, padding: "14px 16px", marginBottom: 20, display: "flex", alignItems: "center", gap: 14, cursor: "pointer", textAlign: "left", boxSizing: "border-box" }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 12, background: "#1f1200", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>📦</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: t.text, marginBottom: 2 }}>Mes commandes</div>
-                    <div style={{ fontSize: 12, color: t.muted }}>En cours & historique</div>
-                  </div>
-                  <span style={{ fontSize: 18, color: t.muted }}>›</span>
-                </button>
-
-                {categories.map(cat => (
-                  <div key={cat} style={{ marginBottom: 24 }}>
-                    <div style={S.catTitle}>{cat}</div>
-                    <div style={S.itemsGrid}>
-                      {menu.filter(m => m.category === cat).map(item => {
-                        const qty = cart[item.id]?.qty || 0;
-                        const out = item.stock === 0;
-                        return (
-                          <div key={item.id} style={{ ...S.card, background: t.card, border: `1px solid ${t.border}`, ...(out?{opacity:0.4,filter:"grayscale(1)"}:{}) }}>
-                            {item.image_url && <img src={item.image_url} alt={item.name} style={{ width: 64, height: 64, borderRadius: 10, objectFit: "cover", flexShrink: 0 }} />}
-                            <div style={S.cardTop}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                <div style={{ ...S.itemName, color: t.text }}>{item.name}</div>
-                                {out && <span style={{ background: "#ff4444", color: "#fff", fontSize: 9, fontWeight: 800, borderRadius: 4, padding: "2px 5px" }}>ÉPUISÉ</span>}
-                              </div>
-                              <div style={S.itemDesc}>{item.description}</div>
-                            </div>
-                            <div style={S.cardBottom}>
-                              <div style={S.itemPrice}>{fp(item.price)}</div>
-                              <div style={S.qtyRow}>
-                                {qty > 0 && !out && <><button style={S.qtyBtn} onClick={() => remItem(item.id)}>−</button><span style={S.qtyNum}>{qty}</span></>}
-                                {!out && <button style={{ ...S.qtyBtn, ...S.addBtn }} onClick={() => addItem(item)}>+</button>}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {totalQty > 0 && (
-                <div style={S.cartBar} onClick={() => setApp("checkout")}>
-                  <div style={S.cartBadge}>{totalQty}</div>
-                  <span style={S.cartText}>Voir ma commande</span>
-                  <span style={S.cartPrice}>{fp(totalPrice)}</span>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* ── CHECKOUT ── */}
-          {appState === "checkout" && (
-            <div style={S.content}>
-              <div style={S.sectionTitle}>🧾 Récapitulatif</div>
-              <div style={S.toggleRow}>
-                <button style={{ ...S.toggleBtn, background: t.card, ...(orderType==="table"?S.toggleActive:{}) }} onClick={() => setOT("table")}>🪑 Table</button>
-                <button style={{ ...S.toggleBtn, background: t.card, ...(orderType==="emporter"?S.toggleActive:{}) }} onClick={() => setOT("emporter")}>🛍️ À emporter</button>
-              </div>
-              {orderType === "table" && (
-                <div style={S.fieldGroup}>
-                  <label style={{ ...S.label, color: t.muted }}>Numéro de table *</label>
-                  <input style={{ ...S.input, background: t.card, border: `1px solid ${t.border}`, color: t.text }} placeholder="Ex : 5" value={tableNum} onChange={e => setTN(e.target.value)} />
-                </div>
-              )}
-              <div style={{ background: t.card, borderRadius: 14, padding: 14, marginBottom: 16, border: `1px solid ${t.border}` }}>
-                {cartItems.map(item => (
-                  <div key={item.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
-                      <button style={{ background: t.border, border: "none", color: t.text, borderRadius: 6, width: 24, height: 24, fontSize: 14, cursor: "pointer" }} onClick={() => remItem(item.id)}>−</button>
-                      <span style={{ fontWeight: 700, fontSize: 14, color: "#ff9500", minWidth: 20 }}>{item.qty}×</span>
-                      <button style={{ background: t.border, border: "none", color: t.text, borderRadius: 6, width: 24, height: 24, fontSize: 14, cursor: "pointer" }} onClick={() => addItem(item)}>+</button>
-                      <span style={{ fontSize: 13, flex: 1, color: t.text }}>{item.name}</span>
-                    </div>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: t.text, whiteSpace: "nowrap" }}>{fp(item.qty*item.price)}</span>
-                  </div>
-                ))}
-                <div style={{ borderTop: `1px solid ${t.border}`, marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 15, color: t.text }}>
-                  <span>Total</span><span style={{ color: "#ff9500", fontSize: 16 }}>{fp(totalPrice)}</span>
-                </div>
-              </div>
-              <div style={S.fieldGroup}>
-                <label style={{ ...S.label, color: t.muted }}>Mode de paiement *</label>
-                <div style={{ display: "flex", gap: 10 }}>
-                  {[{id:"especes",label:"💵 Espèces",desc:"Sur place"},{id:"wave",label:"🌊 Wave",desc:"Mobile Money"}].map(pm => (
-                    <button key={pm.id} onClick={() => setPM(pm.id)} style={{ flex: 1, background: payMethod===pm.id?(pm.id==="wave"?"#001f2e":"#0d1f0d"):t.card, border: `2px solid ${payMethod===pm.id?(pm.id==="wave"?"#00a3e0":"#4caf50"):t.border}`, borderRadius: 12, padding: "12px 10px", cursor: "pointer", textAlign: "left", color: t.text }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 3 }}>{pm.label}</div>
-                      <div style={{ fontSize: 11, color: "#888" }}>{pm.desc}</div>
+              {/* Catégories horizontales style Glovo */}
+              {!search.trim() && (
+                <div style={{ display:"flex", gap:8, padding:"12px 16px", overflowX:"auto", borderBottom:`1px solid ${t.border}`, background: dark ? "#111" : "#fff" }}>
+                  {categories.map(cat => (
+                    <button key={cat} onClick={() => setSelCat(cat)} style={{ flexShrink:0, padding:"8px 16px", borderRadius:20, border:"none", cursor:"pointer", fontWeight:700, fontSize:13, background: selCat===cat ? "#ff6b00" : t.card, color: selCat===cat ? "#fff" : t.muted, border: `1px solid ${selCat===cat ? "#ff6b00" : t.border}`, transition:"all 0.2s" }}>
+                      {cat === "Pain Brochette" ? "🥖 Pain Brochette" :
+                       cat === "Steak et Poulet" ? "🥩 Steak & Poulet" :
+                       cat === "Supplément" ? "➕ Suppléments" :
+                       cat === "Boissons" ? "🥤 Boissons" : cat}
                     </button>
                   ))}
                 </div>
-                {payMethod === "wave" && (
-                  <div style={{ marginTop: 10, background: "#001f2e", border: "1px solid #00a3e0", borderRadius: 10, padding: "10px 12px", fontSize: 12, color: "#7dd3f7" }}>
-                    🌊 Vous serez redirigé vers Wave pour payer <strong>{fp(totalPrice)}</strong>. Le vendeur vérifiera le paiement avant de préparer votre commande.
+              )}
+
+              {/* Titre catégorie ou recherche */}
+              <div style={{ padding:"16px 16px 8px" }}>
+                <div style={{ fontSize:18, fontWeight:800, color: t.text }}>
+                  {search.trim() ? `🔍 "${search}"` : selCat}
+                </div>
+                {!search.trim() && <div style={{ fontSize:12, color: t.muted, marginTop:2 }}>{menu.filter(m=>m.category===selCat).length} articles</div>}
+              </div>
+
+              {/* Grille articles style Glovo */}
+              <div style={{ padding:"0 12px" }}>
+                {filteredMenu.length === 0 && (
+                  <div style={{ textAlign:"center", padding:"40px 0", color: t.muted }}>
+                    <div style={{ fontSize:40, marginBottom:10 }}>🍽️</div>
+                    <div>Aucun article trouvé</div>
                   </div>
                 )}
+                {filteredMenu.map(item => {
+                  const qty = cart[item.id]?.qty || 0;
+                  const out = item.stock === 0;
+                  return (
+                    <div key={item.id} style={{ display:"flex", gap:12, padding:"14px 0", borderBottom:`1px solid ${t.border}`, opacity: out ? 0.5 : 1 }}>
+                      {/* Photo ou placeholder */}
+                      <div style={{ width:90, height:90, borderRadius:14, background: item.image_url ? "transparent" : "linear-gradient(135deg,#1f1200,#2a1800)", flexShrink:0, overflow:"hidden", display:"flex", alignItems:"center", justifyContent:"center", fontSize:36 }}>
+                        {item.image_url
+                          ? <img src={item.image_url} alt={item.name} style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+                          : (item.category==="Boissons" ? "🥤" : item.category==="Supplément" ? "➕" : "🔥")
+                        }
+                      </div>
+                      {/* Infos */}
+                      <div style={{ flex:1, display:"flex", flexDirection:"column", justifyContent:"space-between" }}>
+                        <div>
+                          <div style={{ fontSize:14, fontWeight:700, color: t.text, marginBottom:3, display:"flex", alignItems:"center", gap:6 }}>
+                            {item.name}
+                            {out && <span style={{ background:"#ff4444", color:"#fff", fontSize:9, fontWeight:800, borderRadius:4, padding:"2px 5px" }}>ÉPUISÉ</span>}
+                          </div>
+                          <div style={{ fontSize:12, color: t.muted, lineHeight:1.4 }}>{item.description}</div>
+                        </div>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:8 }}>
+                          <span style={{ fontSize:15, fontWeight:800, color:"#ff9500" }}>{fp(item.price)}</span>
+                          {/* Boutons quantité style Glovo */}
+                          {!out && (
+                            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                              {qty > 0 && (
+                                <>
+                                  <button onClick={() => remItem(item.id)} style={{ width:30, height:30, borderRadius:"50%", background:"#ff6b00", border:"none", color:"#fff", fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700 }}>−</button>
+                                  <span style={{ fontSize:16, fontWeight:800, color: t.text, minWidth:20, textAlign:"center" }}>{qty}</span>
+                                </>
+                              )}
+                              <button onClick={() => addItem(item)} style={{ width:30, height:30, borderRadius:"50%", background:"#ff6b00", border:"none", color:"#fff", fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700 }}>+</button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              <div style={S.fieldGroup}>
-                <label style={{ ...S.label, color: t.muted }}>Instructions spéciales</label>
-                <textarea style={{ ...S.input, resize: "vertical", background: t.card, border: `1px solid ${t.border}`, color: t.text }} placeholder="Sans oignon, extra sauce..." value={note} onChange={e => setNote(e.target.value)} rows={3} />
-              </div>
-              <button style={{ ...S.primaryBtn, background: payMethod==="wave"?"linear-gradient(135deg,#0072bc,#00a3e0)":"#25D366", opacity: submitting ? 0.7 : 1 }} onClick={sendOrder} disabled={submitting}>
-                {submitting ? "⏳ Envoi..." : payMethod==="wave" ? "🌊 Payer avec Wave & Envoyer" : "📲 Envoyer la commande"}
+            </>
+          )}
+
+          {/* ════ CHECKOUT STYLE GLOVO ════ */}
+          {appState === "checkout" && (
+            <div style={{ padding:"16px 14px" }}>
+
+              {/* Back button */}
+              <button onClick={() => setApp("menu")} style={{ background:"transparent", border:"none", color: t.muted, fontSize:14, cursor:"pointer", marginBottom:16, padding:0, display:"flex", alignItems:"center", gap:6 }}>
+                ← Retour au menu
               </button>
-              <button style={S.ghostBtn} onClick={() => setApp("menu")}>← Retour au menu</button>
+
+              <div style={{ fontSize:20, fontWeight:800, color: t.text, marginBottom:20 }}>Ta commande 🧾</div>
+
+              {/* Articles */}
+              <div style={{ background: t.card, borderRadius:16, padding:16, marginBottom:16, border:`1px solid ${t.border}` }}>
+                {cartItems.map(item => (
+                  <div key={item.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", paddingBottom:12, marginBottom:12, borderBottom:`1px solid ${t.border}` }}>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:14, fontWeight:600, color: t.text }}>{item.name}</div>
+                      <div style={{ fontSize:13, color:"#ff9500", fontWeight:700, marginTop:2 }}>{fp(item.price)}</div>
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                      <button onClick={() => remItem(item.id)} style={{ width:28, height:28, borderRadius:"50%", background:"#2a2a2a", border:"none", color:"#fff", fontSize:16, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>−</button>
+                      <span style={{ fontSize:15, fontWeight:800, color: t.text, minWidth:20, textAlign:"center" }}>{item.qty}</span>
+                      <button onClick={() => addItem(item)} style={{ width:28, height:28, borderRadius:"50%", background:"#ff6b00", border:"none", color:"#fff", fontSize:16, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>+</button>
+                    </div>
+                    <div style={{ fontSize:14, fontWeight:700, color: t.text, marginLeft:12, minWidth:70, textAlign:"right" }}>{fp(item.qty*item.price)}</div>
+                  </div>
+                ))}
+                <div style={{ display:"flex", justifyContent:"space-between", fontSize:17, fontWeight:800, color: t.text, paddingTop:4 }}>
+                  <span>Total</span>
+                  <span style={{ color:"#ff9500" }}>{fp(totalPrice)}</span>
+                </div>
+              </div>
+
+              {/* Mode de livraison */}
+              <div style={{ fontSize:14, fontWeight:700, color: t.text, marginBottom:10 }}>📍 Mode de réception</div>
+              <div style={{ display:"flex", gap:10, marginBottom:16 }}>
+                {[{k:"table",icon:"🪑",label:"Sur table"},{k:"emporter",icon:"🛍️",label:"À emporter"}].map(({k,icon,label}) => (
+                  <button key={k} onClick={() => setOT(k)} style={{ flex:1, padding:"14px 10px", borderRadius:14, border:`2px solid ${orderType===k?"#ff6b00":t.border}`, background: orderType===k?"#1f1200":t.card, cursor:"pointer", textAlign:"center" }}>
+                    <div style={{ fontSize:24, marginBottom:4 }}>{icon}</div>
+                    <div style={{ fontSize:13, fontWeight:700, color: orderType===k?"#ff9500":t.muted }}>{label}</div>
+                  </button>
+                ))}
+              </div>
+
+              {orderType === "table" && (
+                <div style={{ marginBottom:16 }}>
+                  <div style={{ fontSize:14, fontWeight:700, color: t.text, marginBottom:8 }}>🪑 Numéro de table</div>
+                  <input
+                    style={{ width:"100%", background: t.card, border:`2px solid ${tableNum ? "#ff6b00" : t.border}`, borderRadius:12, padding:"14px", color: t.text, fontSize:16, boxSizing:"border-box", outline:"none", textAlign:"center", fontWeight:700 }}
+                    placeholder="Ex : 5"
+                    value={tableNum}
+                    onChange={e => setTN(e.target.value)}
+                    type="number"
+                  />
+                </div>
+              )}
+
+              {/* Note */}
+              <div style={{ marginBottom:20 }}>
+                <div style={{ fontSize:14, fontWeight:700, color: t.text, marginBottom:8 }}>📝 Instructions spéciales <span style={{ color: t.muted, fontWeight:400 }}>(optionnel)</span></div>
+                <textarea
+                  style={{ width:"100%", background: t.card, border:`1px solid ${t.border}`, borderRadius:12, padding:"12px 14px", color: t.text, fontSize:14, boxSizing:"border-box", outline:"none", resize:"none" }}
+                  placeholder="Sans oignon, extra sauce, bien cuit..."
+                  value={note}
+                  onChange={e => setNote(e.target.value)}
+                  rows={3}
+                />
+              </div>
+
+              {/* Paiement — espèces uniquement */}
+              <div style={{ background: t.card, borderRadius:14, padding:"14px 16px", marginBottom:20, border:`1px solid ${t.border}`, display:"flex", alignItems:"center", gap:12 }}>
+                <div style={{ width:40, height:40, borderRadius:10, background:"#0d2a0d", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>💵</div>
+                <div>
+                  <div style={{ fontSize:14, fontWeight:700, color: t.text }}>Paiement en espèces</div>
+                  <div style={{ fontSize:12, color: t.muted }}>Règlement sur place à la livraison</div>
+                </div>
+                <div style={{ marginLeft:"auto", color:"#25D366", fontWeight:800, fontSize:13 }}>✓</div>
+              </div>
+
+              {/* Bouton commander */}
+              <button
+                onClick={sendOrder}
+                disabled={submitting}
+                style={{ width:"100%", background: submitting?"#555":"linear-gradient(135deg,#ff6b00,#ff9500)", color:"#fff", border:"none", borderRadius:16, padding:"16px", fontSize:16, fontWeight:800, cursor: submitting?"not-allowed":"pointer", boxShadow:"0 6px 20px rgba(255,107,0,0.4)", boxSizing:"border-box" }}
+              >
+                {submitting ? "⏳ Envoi en cours..." : `✅ Commander — ${fp(totalPrice)}`}
+              </button>
             </div>
           )}
 
-          {/* ── CONFIRM ── */}
-          {appState === "confirm" && (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "40px 24px", textAlign: "center" }}>
-              <div style={{ fontSize: 72, marginBottom: 16 }}>✅</div>
-              <div style={{ fontSize: 24, fontWeight: 800, marginBottom: 10, color: "#25D366" }}>Commande envoyée !</div>
-              <div style={{ fontSize: 14, color: "#888", marginBottom: 20, lineHeight: 1.7 }}>
-                {payMethod === "wave" ? "Vérifiez que votre paiement Wave a été effectué.\nLe vendeur confirme après réception." : "Règlement en espèces sur place."}<br />
-                Nous préparons votre commande !
-              </div>
-              {trackId && (
-                <div style={{ background: t.card, border: "1px solid #4fc3f7", borderRadius: 14, padding: 18, marginBottom: 20, width: "100%", boxSizing: "border-box" }}>
-                  <div style={{ fontSize: 13, color: "#4fc3f7", marginBottom: 8 }}>🔍 Suivez votre commande en direct</div>
-                  <div style={{ fontSize: 26, fontWeight: 900, color: t.text, letterSpacing: 3 }}>#{trackId}</div>
-                  <button style={{ ...S.primaryBtn, background: "#0d1f2e", color: "#4fc3f7", border: "1px solid #4fc3f7", marginTop: 12, marginBottom: 0 }} onClick={() => setApp("tracking")}>
-                    📡 Suivi en temps réel
-                  </button>
-                </div>
-              )}
-              <button style={S.ghostBtn} onClick={reset}>Passer une nouvelle commande</button>
+          {/* Cart bar fixe */}
+          {appState === "menu" && totalQty > 0 && (
+            <div onClick={() => setApp("checkout")} style={{ position:"fixed", bottom:16, left:12, right:12, background:"#ff6b00", borderRadius:16, padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", cursor:"pointer", boxShadow:"0 8px 30px rgba(255,107,0,0.5)", zIndex:99 }}>
+              <div style={{ background:"rgba(255,255,255,0.25)", borderRadius:999, width:28, height:28, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, fontSize:13, color:"#fff" }}>{totalQty}</div>
+              <span style={{ fontWeight:700, fontSize:15, color:"#fff", flex:1, marginLeft:12 }}>Voir ma commande</span>
+              <span style={{ fontWeight:800, fontSize:14, color:"#fff" }}>{fp(totalPrice)}</span>
             </div>
           )}
 
@@ -933,47 +988,3 @@ export default function App() {
 // ─── THÈMES ──────────────────────────────────────────────────────────────────
 const D = { bg:"#0f0f0f", card:"#1a1a1a", border:"#2a2a2a", text:"#f0f0f0", muted:"#888" };
 const L = { bg:"#f5f5f5", card:"#ffffff", border:"#e0e0e0", text:"#111111", muted:"#666666" };
-
-// ─── STYLES ──────────────────────────────────────────────────────────────────
-const S = {
-  root:{ fontFamily:"'Sora','Segoe UI',sans-serif", minHeight:"100vh", paddingBottom:100 },
-  header:{ background:"linear-gradient(135deg,#ff6b00,#ff9500)", padding:"18px 16px", position:"sticky", top:0, zIndex:10, boxShadow:"0 4px 20px rgba(255,107,0,0.4)" },
-  logoRow:{ display:"flex", alignItems:"center", gap:12 },
-  logoEmoji:{ fontSize:32, cursor:"pointer", userSelect:"none" },
-  logoName:{ fontSize:18, fontWeight:900, letterSpacing:1, color:"#fff" },
-  logoTagline:{ fontSize:11, color:"rgba(255,255,255,0.85)", marginTop:1 },
-  exitBtn:{ background:"rgba(255,255,255,0.2)", border:"none", color:"#fff", borderRadius:8, width:34, height:34, fontSize:14, cursor:"pointer" },
-  content:{ padding:"16px 12px" },
-  catTitle:{ fontSize:15, fontWeight:700, color:"#ff9500", marginBottom:10, paddingBottom:6, borderBottom:"1px solid #2a2a2a" },
-  itemsGrid:{ display:"flex", flexDirection:"column", gap:10 },
-  card:{ borderRadius:14, padding:"12px 14px", display:"flex", alignItems:"flex-end", gap:10 },
-  cardTop:{ flex:1 },
-  itemName:{ fontWeight:700, fontSize:14, marginBottom:3 },
-  itemDesc:{ fontSize:11, color:"#888", lineHeight:1.4 },
-  cardBottom:{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:8, minWidth:86 },
-  itemPrice:{ fontSize:13, fontWeight:700, color:"#ff9500", whiteSpace:"nowrap" },
-  qtyRow:{ display:"flex", alignItems:"center", gap:6 },
-  qtyBtn:{ background:"#2a2a2a", border:"none", color:"#fff", borderRadius:8, width:28, height:28, fontSize:16, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" },
-  addBtn:{ background:"#ff6b00" },
-  qtyNum:{ fontSize:15, fontWeight:700, minWidth:16, textAlign:"center" },
-  cartBar:{ position:"fixed", bottom:16, left:12, right:12, background:"#ff6b00", borderRadius:16, padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", cursor:"pointer", boxShadow:"0 8px 30px rgba(255,107,0,0.5)", zIndex:99 },
-  cartBadge:{ background:"#fff", color:"#ff6b00", borderRadius:999, width:26, height:26, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, fontSize:13 },
-  cartText:{ fontWeight:700, fontSize:15, color:"#fff", flex:1, marginLeft:10 },
-  cartPrice:{ fontWeight:800, fontSize:14, color:"#fff" },
-  sectionTitle:{ fontSize:18, fontWeight:800, marginBottom:16, color:"#ff9500" },
-  toggleRow:{ display:"flex", gap:10, marginBottom:16 },
-  toggleBtn:{ flex:1, padding:"10px", borderRadius:12, border:"2px solid #2a2a2a", color:"#888", fontWeight:600, fontSize:14, cursor:"pointer" },
-  toggleActive:{ border:"2px solid #ff6b00", color:"#ff6b00", background:"#1f1200" },
-  fieldGroup:{ marginBottom:14 },
-  label:{ display:"block", fontSize:13, color:"#aaa", marginBottom:6 },
-  input:{ width:"100%", background:"#1a1a1a", border:"1px solid #2a2a2a", borderRadius:10, padding:"12px 14px", color:"#fff", fontSize:15, boxSizing:"border-box", outline:"none" },
-  primaryBtn:{ width:"100%", background:"#ff6b00", color:"#fff", border:"none", borderRadius:14, padding:"14px", fontSize:15, fontWeight:700, cursor:"pointer", marginBottom:10, display:"flex", alignItems:"center", justifyContent:"center", gap:8, boxSizing:"border-box" },
-  ghostBtn:{ width:"100%", background:"transparent", color:"#888", border:"1px solid #2a2a2a", borderRadius:14, padding:"12px", fontSize:14, cursor:"pointer", marginBottom:8, boxSizing:"border-box" },
-  statsRow:{ display:"flex", gap:10, marginBottom:16 },
-  statBox:{ flex:1, borderRadius:12, padding:"12px 8px", textAlign:"center", border:"1px solid #2a2a2a" },
-  statNum:{ fontSize:18, fontWeight:800, color:"#fff" },
-  statLabel:{ fontSize:10, color:"#888", marginTop:2 },
-  modalOverlay:{ position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:200, padding:24 },
-  modal:{ background:"#1a1a1a", borderRadius:18, padding:24, width:"100%", maxWidth:320, textAlign:"center", border:"1px solid #2a2a2a" },
-  modalTitle:{ fontSize:18, fontWeight:700, marginBottom:16, color:"#fff" },
-};
