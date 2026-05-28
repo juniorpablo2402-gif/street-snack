@@ -8,6 +8,7 @@ import { jsPDF } from "jspdf";
 const SUPABASE_URL  = "https://udgbxqnaocsroeadmbgh.supabase.co";
 const SUPABASE_KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVkZ2J4cW5hb2Nzcm9lYWRtYmdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2NjU5MzAsImV4cCI6MjA5NDI0MTkzMH0.WWXiOc-hBcbFnloTkoHIKUxhtbjobHa33UU3rmoSSsk";
 const WAVE_LINK     = "https://pay.wave.com/m/M_ci_JT9OY4oad86d/c/ci";
+const VENDOR_CODE   = "Lelama225";
 const APP_URL       = window.location.href.split("?")[0];
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -110,7 +111,7 @@ function SplashScreen({ onDone }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // AUTH — CONNEXION / INSCRIPTION
 // ══════════════════════════════════════════════════════════════════════════════
-function AuthScreen({ onAuth }) {
+function AuthScreen({ onAuth, onVendor }) {
   const [mode, setMode]       = useState("login"); // login | register
   const [email, setEmail]     = useState("");
   const [password, setPass]   = useState("");
@@ -118,9 +119,16 @@ function AuthScreen({ onAuth }) {
   const [phone, setPhone]     = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr]         = useState("");
-  const [taps, setTaps] = useState(0);
+  const [taps, setTaps]       = useState(0);
+  const [showVendor, setShowVendor] = useState(false);
+  const [vCode, setVCode]     = useState("");
+  const [vErr, setVErr]       = useState(false);
 
-
+  const handleLogoTap = () => {
+    const n = taps + 1; setTaps(n);
+    if (n >= 5) { setShowVendor(true); setTaps(0); }
+    setTimeout(() => setTaps(c => Math.max(0, c-1)), 2000);
+  };
 
   const handleAuth = async () => {
     setErr(""); setLoading(true);
@@ -142,13 +150,27 @@ function AuthScreen({ onAuth }) {
     setLoading(false);
   };
 
-
+  const loginVendor = () => {
+    if (vCode === VENDOR_CODE) { onVendor(); setShowVendor(false); }
+    else setVErr(true);
+  };
 
   return (
     <div style={{ minHeight: "100vh", background: "#0f0f0f", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      {showVendor && (
+        <div style={S.modalOverlay}>
+          <div style={S.modal}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>🔐</div>
+            <div style={S.modalTitle}>Espace Vendeur</div>
+            <input style={{ ...S.input, marginBottom: 8 }} type="password" placeholder="Code secret" value={vCode} onChange={e => setVCode(e.target.value)} onKeyDown={e => e.key === "Enter" && loginVendor()} />
+            {vErr && <div style={{ color: "#ff4444", fontSize: 12, marginBottom: 8 }}>Code incorrect ❌</div>}
+            <button style={S.primaryBtn} onClick={loginVendor}>Accéder</button>
+            <button style={S.ghostBtn} onClick={() => { setShowVendor(false); setVCode(""); setVErr(false); }}>Annuler</button>
+          </div>
+        </div>
+      )}
 
-
-      <div style={{ width: 90, height: 90, borderRadius: "50%", background: "linear-gradient(135deg,#ff6b00,#ff9500)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 42, marginBottom: 16, boxShadow: "0 0 50px rgba(255,107,0,0.4)", cursor: "pointer", userSelect: "none", transform: taps > 0 ? "scale(0.9)" : "scale(1)", transition: "transform 0.1s" }}>🔥</div>
+      <div onClick={handleLogoTap} style={{ width: 90, height: 90, borderRadius: "50%", background: "linear-gradient(135deg,#ff6b00,#ff9500)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 42, marginBottom: 16, boxShadow: "0 0 50px rgba(255,107,0,0.4)", cursor: "pointer", userSelect: "none", transform: taps > 0 ? "scale(0.9)" : "scale(1)", transition: "transform 0.1s" }}>🔥</div>
       <div style={{ fontSize: 26, fontWeight: 900, color: "#fff", letterSpacing: 2, marginBottom: 4 }}>THE STREET SNACK</div>
       <div style={{ fontSize: 12, color: "#ff9500", marginBottom: 28, letterSpacing: 1 }}>{mode === "login" ? "Connectez-vous pour commander" : "Créez votre compte"}</div>
 
@@ -770,7 +792,8 @@ export default function App() {
 
   return (
     <ThemeCtx.Provider value={{ dark, toggle: () => setDark(p => !p) }}>
-      {appState === "auth"     && <AuthScreen onAuth={u => { setUser(u); setApp("menu"); }} />}
+      {appState === "auth"     && <AuthScreen onAuth={u => { setUser(u); setApp("menu"); }} onVendor={() => setApp("vendor")} />}
+      {appState === "vendor"   && <VendorDashboard onExit={() => setApp(user ? "menu" : "auth")} />}
       {appState === "tracking" && <OrderTracking orderId={trackId} onBack={() => setApp("menu")} />}
       {appState === "history"  && <OrderHistory user={user} onViewOrder={(id) => { setTrackId(id); setApp("tracking"); }} onBack={() => setApp("menu")} />}
 
