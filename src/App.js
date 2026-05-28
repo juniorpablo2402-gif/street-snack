@@ -681,9 +681,12 @@ function VendorDashboard({ onExit }) {
 // APP PRINCIPALE — MENU CLIENT
 // ══════════════════════════════════════════════════════════════════════════════
 export default function App() {
+  // Restaurer session depuis localStorage
+  const savedUser = (() => { try { const u = localStorage.getItem("ss_user"); return u ? JSON.parse(u) : null; } catch { return null; } })();
+
   const [dark, setDark]       = useState(true);
-  const [appState, setApp]    = useState("splash");
-  const [user, setUser]       = useState(null);
+  const [appState, setApp]    = useState(savedUser ? "menu" : "splash");
+  const [user, setUser]       = useState(savedUser);
   const [menu, setMenu]       = useState([]);
   const [cart, setCart]       = useState({});
   const [selCat, setSelCat]   = useState(null);
@@ -694,6 +697,12 @@ export default function App() {
   const [submitting, setSub]  = useState(false);
   const [search, setSearch]   = useState("");
   const t = dark ? D : L;
+
+  // Sauvegarder user dans localStorage à chaque changement
+  useEffect(() => {
+    if (user) localStorage.setItem("ss_user", JSON.stringify(user));
+    else localStorage.removeItem("ss_user");
+  }, [user]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -761,7 +770,7 @@ export default function App() {
 
   return (
     <ThemeCtx.Provider value={{ dark, toggle: () => setDark(p => !p) }}>
-      {appState === "auth"     && <AuthScreen onAuth={u => { setUser(u); setApp("menu"); }} />}
+      {appState === "auth"     && <AuthScreen onAuth={u => { setUser(u); localStorage.setItem("ss_user", JSON.stringify(u)); setApp("menu"); }} />}
       {appState === "tracking" && <OrderTracking orderId={trackId} onBack={() => setApp("menu")} />}
       {appState === "history"  && <OrderHistory user={user} onViewOrder={id => { setTrackId(id); setApp("tracking"); }} onBack={() => setApp("menu")} />}
 
@@ -781,11 +790,10 @@ export default function App() {
               <div style={{ display:"flex", gap:6 }}>
                 <button onClick={() => setDark(p=>!p)} style={{ background: t.card, border:`1px solid ${t.border}`, color: t.text, borderRadius:10, width:34, height:34, fontSize:16, cursor:"pointer" }}>{dark?"☀️":"🌙"}</button>
                 {/* Bouton commandes style Glovo */}
-                <button onClick={() => setApp("history")} style={{ background: t.card, border:`1px solid ${t.border}`, color: t.text, borderRadius:10, width:34, height:34, fontSize:16, cursor:"pointer", position:"relative" }}>
+                <button onClick={() => { if (user) setApp("history"); }} style={{ background: t.card, border:`1px solid ${t.border}`, color: t.text, borderRadius:10, width:34, height:34, fontSize:16, cursor:"pointer", position:"relative" }}>
                   📦
-                  {/* Badge si commande en cours — optionnel */}
                 </button>
-                {user && <button onClick={() => { setUser(null); setApp("auth"); }} style={{ background: t.card, border:`1px solid ${t.border}`, color: t.muted, borderRadius:10, width:34, height:34, fontSize:14, cursor:"pointer" }}>🚪</button>}
+                {user && <button onClick={() => { setUser(null); localStorage.removeItem("ss_user"); setApp("auth"); }} style={{ background: t.card, border:`1px solid ${t.border}`, color: t.muted, borderRadius:10, width:34, height:34, fontSize:14, cursor:"pointer" }}>🚪</button>}
               </div>
             </div>
 
